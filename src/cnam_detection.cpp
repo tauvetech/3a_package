@@ -24,14 +24,14 @@ void cnam_image_Callback(const sensor_msgs::Image::ConstPtr& msg)
   {
     cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
     ROS_INFO("I have received image! ;-)");
-    IplImage _ipl_img=cv_ptr->image;
-    IplImage *ptr_ipl_img= &_ipl_img;
   }
   catch (cv_bridge::Exception& e)
   {
     ROS_ERROR("cv_bridge exception: %s", e.what());
     return;
   }
+  IplImage _ipl_img=cv_ptr->image;
+  IplImage *ptr_ipl_img= &_ipl_img;
 
   //TODO  For see OpenCV Image:
   //  // Update GUI Window
