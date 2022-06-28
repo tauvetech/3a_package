@@ -43,8 +43,13 @@ void cnam_image_Callback(const sensor_msgs::Image::ConstPtr& msg)
     ROS_ERROR("cv_bridge exception: %s", e.what());
     return;
   }
+#if CV_VERSION_MAJOR == 4
+  IplImage _ipl_img=cvIplImage(cv_ptr->image);
+#else
   IplImage _ipl_img=cv_ptr->image;
+#endif
   IplImage *ptr_ipl_img= &_ipl_img;
+
 
   //For see OpenCV Image:
   //
