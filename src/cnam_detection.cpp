@@ -1,145 +1,127 @@
-#include "ros/ros.h"
-#include "std_msgs/String.h"
-#include "std_msgs/Int32.h"
+#include <cstdio>
+#include "rclcpp/rclcpp.hpp"
 
-//add include for manipulate sensor_msgs::Image type:
-#include "sensor_msgs/Image.h"
-#include <cv_bridge/cv_bridge.h>
 #include "opencv2/opencv.hpp"
 
-//TODO add #include for output topic type (geometry_msgs/Twist)
-#include "geometry_msgs/Twist.h"
+//add include for manipulate sensor_msgs::msgs::Image type:
+#include "sensor_msgs/msg/image.hpp"
+#include "cv_bridge/cv_bridge.h"
+
+//TODO add #include for output topic type (geometry_msgs::msg::Twist)
+#include "geometry_msgs/msg/twist.hpp"
 
 //for binarisation function:
 #include "DetectionCnam_codels.hpp"
 
+rclcpp::Node::SharedPtr ptr_node = nullptr;
+
+rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr sub_;
+rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_;
+
 static const std::string OPENCV_WINDOW = "Image window";
 
-//TODO declare publisher topic for command output:
-ros::Publisher pub;
 
-int32_t _r;
-int32_t _g;
-int32_t _b;
-int32_t _seuil;
-
-ros::NodeHandle *nh;
-
-void cnam_image_Callback(const sensor_msgs::Image::ConstPtr& msg)
+void getImage(const sensor_msgs::msg::Image::SharedPtr _msg)
 {
-  ros::Time begin = ros::Time::now();
-  //usleep(10000);
-//  ros::Time end = ros::Time::now();
+    rclcpp::Time begin = ptr_node->get_clock()->now();
 
-  //necessary for transform ros image type into opencv image type
-  cv_bridge::CvImagePtr cv_ptr;
-  try
-  {
-    cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
-    ROS_INFO("I have received image! ;-)");
-  }
-  catch (cv_bridge::Exception& e)
-  {
-    ROS_ERROR("cv_bridge exception: %s", e.what());
-    return;
-  }
+    //RCLCPP_INFO(ptr_node->get_logger(),"I have received image! ;-)");
+
+    int b;
+    int g;
+    int r;
+    int seuil;
+
+    //necessary for transform ros image type into opencv image type
+    cv_bridge::CvImagePtr cv_ptr;
+    try
+    {
+        cv_ptr = cv_bridge::toCvCopy(_msg, sensor_msgs::image_encodings::BGR8);
+        RCLCPP_INFO(ptr_node->get_logger(),"I have received image! ;-)");
+    }
+    catch (cv_bridge::Exception& e)
+    {
+        RCLCPP_ERROR(ptr_node->get_logger(),"cv_bridge exception: %s", e.what());
+        return;
+    }
+
 #if CV_VERSION_MAJOR == 4
-  IplImage _ipl_img=cvIplImage(cv_ptr->image);
+    IplImage _ipl_img=cvIplImage(cv_ptr->image);
 #else
-  IplImage _ipl_img=cv_ptr->image;
+    IplImage _ipl_img=cv_ptr->image;
 #endif
-  IplImage *ptr_ipl_img= &_ipl_img;
 
+    IplImage *ptr_ipl_img= &_ipl_img;
 
-  //For see OpenCV Image:
-  //
-  // Update GUI Window
-  //  cv::imshow(OPENCV_WINDOW, cv_ptr->image);
-  //  cv::waitKey(3);
+    //For see OpenCV Image:
+    //
+    // Update GUI Window
+    cv::imshow(OPENCV_WINDOW, cv_ptr->image);
+    cv::waitKey(3);
 
-  geometry_msgs::Twist cmd;
+    ptr_node->get_parameter("blue", b);
+    ptr_node->get_parameter("green", g);
+    ptr_node->get_parameter("red", r);
+    ptr_node->get_parameter("seuil", seuil);
+    //RCLCPP_INFO(ptr_node->get_logger(),"parameter b, g, r, seuil: %d, %d, %d, %d", b, g, r, seuil);
 
-  //declare a CvPoint
-  CvPoint coord;
+    //declare a CvPoint
+    CvPoint point;
+    geometry_msgs::msg::Twist cmd;
 
-  nh->getParam("my_r", _r);
-  nh->getParam("my_g", _g);
-  nh->getParam("my_b", _b);
-  nh->getParam("my_seuil", _seuil);
+    //call binarisation method!
+    point = binarisation(ptr_ipl_img, b, g, r, seuil);
+    if (point.x != -1 || point.y != -1) {
+        RCLCPP_INFO(ptr_node->get_logger(), "x = %d, y = %d", point.x, point.y);
+        float cibleY = ptr_ipl_img->height*3/4;
+        float cmd_x_pixel_value = 2.0 / ptr_ipl_img->width;
+        float cmd_y_pixel_value = 2.0/(ptr_ipl_img->height - cibleY);
+        cmd.angular.z = - ((point.x * cmd_x_pixel_value) - 1.0);
+        cmd.linear.x = - ((point.y - cibleY) * cmd_y_pixel_value);
 
-  //call binarisation method!
-  coord = binarisation(ptr_ipl_img, _b, _g, _r,_seuil);
+        RCLCPP_INFO(ptr_node->get_logger(),"cibleY: %f", cibleY);
+        RCLCPP_INFO(ptr_node->get_logger(),"cmd.linear.x: %f",cmd.linear.x);
+        RCLCPP_INFO(ptr_node->get_logger(),"cmd.angular.z: %f",cmd.angular.z);
 
-  if (coord.x > -1)
-  {
+    }
+    else {
+        cmd.angular.z = 0.0;
+        cmd.angular.x = 0.0;
+    }
+    //TODO send command in output topic.
+    pub_->publish(cmd);
 
-  //print with ROS_INFO coordinate points.x points.y
-  ROS_INFO("coord X: %d",coord.x);
-  ROS_INFO("coord Y: %d",coord.y);
-
-  ROS_INFO("_r: %d", _r);
-  ROS_INFO("_g: %d", _g);
-  ROS_INFO("_b: %d", _b);
-  ROS_INFO("_seuil: %d", _seuil);
-
-
-  //TODO calculate command to send:
-
-  float cibleY = ptr_ipl_img->height * 3 / 4;
-
-  float cmd_x_pixel_value= 2.0 / ptr_ipl_img->width;
-  float cmd_y_pixel_value= 2.0 / (ptr_ipl_img->height - cibleY);
-
-  cmd.angular.z= - ((coord.x * cmd_x_pixel_value) -1.0);
-  cmd.linear.x = - ((coord.y - cibleY) * cmd_y_pixel_value);
-
-//  //cmd.angular.z=1.0;
-//  if (coord.y > cibleY)
-//    cmd.linear.x = -0.5;
-//  else
-//    cmd.linear.x = 0.5;
-
-  //ROS_INFO("cibleY: %f", cibleY);
-  ROS_INFO("cmd.linear.x: %f",cmd.linear.x);
-  ROS_INFO("cmd.angular.z: %f",cmd.angular.z);
-  }
-  else
-  {
-    cmd.angular.z=0.0;
-    cmd.linear.x=0.0;
-  }
-  //TODO send command in output topic.
-  pub.publish(cmd);
-  ros::Time end = ros::Time::now();
-
-  ROS_INFO("begin: %d",begin.toNSec());
-  ROS_INFO("end: %d",end.toNSec());
-  ROS_INFO("duration: %d", (end.toNSec() - begin.toNSec()));
-
+    rclcpp::Time end = ptr_node->get_clock()->now();
+    RCLCPP_INFO(ptr_node->get_logger(), "begin : %ld", begin.nanoseconds());
+    RCLCPP_INFO(ptr_node->get_logger(), "end : %ld", end.nanoseconds());
+    RCLCPP_INFO(ptr_node->get_logger(), "duration : %ld (ns) %ld (ms)", (end.nanoseconds() - begin.nanoseconds()), ((end.nanoseconds() - begin.nanoseconds()))/1000000);
 }
 
-int main(int argc, char **argv)
+
+
+int main(int argc, char ** argv)
 {
-  ros::init(argc, argv, "cnam_detection");
+    (void) argc;
+    (void) argv;
+    rclcpp::init(argc, argv);
 
-  nh = new ros::NodeHandle;
+    ptr_node = rclcpp::Node::make_shared("detection_cnam");
 
-  //TODO  //  For see OpenCV Image:
-  //  cv::namedWindow(OPENCV_WINDOW);
+    auto sensor_qos = rclcpp::QoS(rclcpp::SensorDataQoS());
 
-  ros::Subscriber sub = nh->subscribe("cnam_input_image", 1, cnam_image_Callback);
+    sub_ = ptr_node->create_subscription<sensor_msgs::msg::Image>("/image", sensor_qos,getImage);
+    //auto subscription = ptr_node->create_subscription<sensor_msgs::msg::Image>("topic", 10, getImage);
 
-  //instantiate publisher topic for command output (geometry_msgs/Twist):
-  //must be global for visibility in callback function.
-  pub = nh->advertise<geometry_msgs::Twist>("cnam_output_command", 1);
+    //instantiate publisher topic for command output (geometry_msgs::msg::Twist):
+    //must be global for visibility in callback function.
+    pub_ = ptr_node->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 1);
 
-  nh->setParam("my_r", 213);
-  nh->setParam("my_g", 103);
-  nh->setParam("my_b", 4);
-  nh->setParam("my_seuil", 40);
+    ptr_node->declare_parameter<std::uint8_t>("blue",  180);
+    ptr_node->declare_parameter<std::uint8_t>("green", 100);
+    ptr_node->declare_parameter<std::uint8_t>("red",   50);
+    ptr_node->declare_parameter<std::uint8_t>("seuil", 30);
 
-  ros::spin();
-
-  //cv::destroyWindow(OPENCV_WINDOW);
-  return 0;
+    rclcpp::spin(ptr_node);
+    rclcpp::shutdown();
+    return 0;
 }
