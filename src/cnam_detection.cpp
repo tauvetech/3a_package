@@ -5,7 +5,7 @@
 
 //add include for manipulate sensor_msgs::msgs::Image type:
 #include "sensor_msgs/msg/image.hpp"
-#include "cv_bridge/cv_bridge.h"
+#include "cv_bridge/cv_bridge.hpp"
 
 //TODO add #include for output topic type (geometry_msgs::msg::Twist)
 #include "geometry_msgs/msg/twist.hpp"
