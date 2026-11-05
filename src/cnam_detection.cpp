@@ -8,7 +8,7 @@
 #include "cv_bridge/cv_bridge.hpp"
 
 //TODO add #include for output topic type (geometry_msgs::msg::Twist)
-#include "geometry_msgs/msg/twist.hpp"
+#include "geometry_msgs/msg/twist_stamped.hpp"
 
 //for binarisation function:
 #include "DetectionCnam_codels.hpp"
@@ -16,7 +16,7 @@
 rclcpp::Node::SharedPtr ptr_node = nullptr;
 
 rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr sub_;
-rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_;
+rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr pub_;
 
 static const std::string OPENCV_WINDOW = "Image window";
 
@@ -67,7 +67,7 @@ void getImage(const sensor_msgs::msg::Image::SharedPtr _msg)
 
     //declare a CvPoint
     CvPoint point;
-    geometry_msgs::msg::Twist cmd;
+    geometry_msgs::msg::TwistStamped cmd;
 
     //call binarisation method!
     point = binarisation(ptr_ipl_img, b, g, r, seuil);
@@ -76,24 +76,24 @@ void getImage(const sensor_msgs::msg::Image::SharedPtr _msg)
         float cibleY = ptr_ipl_img->height*3/4;
         float cmd_x_pixel_value = 2.0 / ptr_ipl_img->width;
         float cmd_y_pixel_value = 2.0/(ptr_ipl_img->height - cibleY);
-        cmd.angular.z = - ((point.x * cmd_x_pixel_value) - 1.0);
-        cmd.linear.x = - ((point.y - cibleY) * cmd_y_pixel_value);
+        cmd.twist.angular.z = - ((point.x * cmd_x_pixel_value) - 1.0);
+        cmd.twist.linear.x = - ((point.y - cibleY) * cmd_y_pixel_value);
 
         RCLCPP_INFO(ptr_node->get_logger(),"cibleY: %f", cibleY);
-        RCLCPP_INFO(ptr_node->get_logger(),"cmd.linear.x: %f",cmd.linear.x);
-        RCLCPP_INFO(ptr_node->get_logger(),"cmd.angular.z: %f",cmd.angular.z);
+        RCLCPP_INFO(ptr_node->get_logger(),"cmd.twist.linear.x: %f",cmd.twist.linear.x);
+        RCLCPP_INFO(ptr_node->get_logger(),"cmd.twist.angular.z: %f",cmd.twist.angular.z);
 
     }
     else {
-        cmd.angular.z = 0.0;
-        cmd.angular.x = 0.0;
+        cmd.twist.angular.z = 0.0;
+        cmd.twist.angular.x = 0.0;
     }
     //TODO send command in output topic.
     pub_->publish(cmd);
 
     rclcpp::Time end = ptr_node->get_clock()->now();
     RCLCPP_INFO(ptr_node->get_logger(), "begin : %ld", begin.nanoseconds());
-    RCLCPP_INFO(ptr_node->get_logger(), "end : %ld", end.nanoseconds());
+    RCLCPP_INFO(ptr_node->get_logger(), "end   : %ld", end.nanoseconds());
     RCLCPP_INFO(ptr_node->get_logger(), "duration : %ld (ns) %ld (ms)", (end.nanoseconds() - begin.nanoseconds()), ((end.nanoseconds() - begin.nanoseconds()))/1000000);
 }
 
@@ -114,7 +114,7 @@ int main(int argc, char ** argv)
 
     //instantiate publisher topic for command output (geometry_msgs::msg::Twist):
     //must be global for visibility in callback function.
-    pub_ = ptr_node->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 1);
+    pub_ = ptr_node->create_publisher<geometry_msgs::msg::TwistStamped>("/cmd_vel", 1);
 
     ptr_node->declare_parameter<std::uint8_t>("blue",  180);
     ptr_node->declare_parameter<std::uint8_t>("green", 100);

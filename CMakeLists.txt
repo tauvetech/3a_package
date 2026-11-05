@@ -21,14 +21,14 @@ target_include_directories(cnam_detection PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 target_compile_features(cnam_detection PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
-ament_target_dependencies(
+target_link_libraries(
   cnam_detection
-  "sensor_msgs"
-  "geometry_msgs"
-  "rclcpp"
-  "OpenCV"
-  "cv_bridge"
-  "image_transport"
+  "sensor_msgs::sensor_msgs"
+  "geometry_msgs::geometry_msgs"
+  "rclcpp::rclcpp"
+  ${OpenCV_LIBS}
+  "cv_bridge::cv_bridge"
+  "image_transport::image_transport"
 )
 
 install(TARGETS cnam_detection
